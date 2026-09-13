@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Open in Browser", #selector(openInBrowser)))
         menu.addItem(item("New Link (invalidate old one)", #selector(resetToken)))
         menu.addItem(.separator())
-        let w = item("Show QR Widget on Desktop (hides while a phone is connected)", #selector(toggleWidget))
+        let w = item("Show QR Widget", #selector(toggleWidget))
         w.state = defaults.bool(forKey: "widget") ? .on : .off
         menu.addItem(w)
         let l = item("Start at Login", #selector(toggleLogin)); l.state = SMAppService.mainApp.status == .enabled ? .on : .off

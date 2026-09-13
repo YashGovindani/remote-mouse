@@ -48,7 +48,7 @@ The app lives in the **menu bar** only (a cursor icon near the clock). It has no
    Turn it off any time via *Start at Login* in the menu, or under *System Settings > General > Login Items & Extensions*.
 4. **Desktop widget.** A QR card appears on the desktop (above the wallpaper, below your windows). Drag it wherever
    you like; the spot is remembered. It hides while a phone is connected and comes back when none is.
-   Toggle it with *Show QR Widget on Desktop* in the menu.
+   Toggle it with *Show QR Widget* in the menu.
 
 ## Connect the phone
 
@@ -91,7 +91,7 @@ Several phones can be connected at once.
 | Copy Phone Link | copies `http://<mac-ip>:7070/?k=<token>` |
 | Open in Browser | opens the page on the Mac itself (handy to check the server) |
 | New Link | new token; old links stop working |
-| Show QR Widget on Desktop | toggle the widget |
+| Show QR Widget | toggle the widget |
 | Start at Login | toggle the login item |
 | Grant Accessibility Access | only shown while permission is missing; opens the settings pane |
 | Restart Server | restarts the built-in server |
