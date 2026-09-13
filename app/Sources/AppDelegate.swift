@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var server: RemoteServer!
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
-    private let menuCard = QRCard(frame: NSRect(origin: .zero, size: QRCard.size))
+    private let menuCard = QRCard(style: .menu)
     private var widget: WidgetWindow?
     private var timer: Timer?
     private var currentIP = ""
