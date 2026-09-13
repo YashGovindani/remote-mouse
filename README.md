@@ -4,7 +4,7 @@ Control this Mac's cursor, clicks, scrolling, typing and media keys from a phone
 No app to install on the phone: the Mac serves a touchpad web page, the phone talks to it over a WebSocket,
 and the Mac injects the events with CoreGraphics.
 
-<p align="center"><img src="docs/widget.png" width="560" alt="Desktop widget showing the QR code"></p>
+<p align="center"><img src="docs/widget.webp" width="560" alt="Desktop widget showing the QR code"></p>
 <p align="center">
   <img src="docs/phone.png" width="270" alt="Phone touchpad page">
   &nbsp;&nbsp;
