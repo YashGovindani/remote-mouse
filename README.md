@@ -59,6 +59,10 @@ The app lives in the **menu bar** only (a cursor icon near the clock). It has no
 4. Optional, recommended: **Add to Home Screen** (Safari: Share > Add to Home Screen; Chrome: menu > Add to Home screen).
    It then opens full-screen like an app, and the link keeps working because it never changes.
 
+The page keeps the phone's screen awake while it is open. Browsers only offer the real wake-lock API on HTTPS, so
+over plain HTTP the page plays a tiny silent video after your first touch instead. One side effect on iPhone: starting
+it pauses any music the phone itself is playing.
+
 The link contains a secret token. Anyone on your network who has it can control the Mac, so don't share it.
 *New Link* in the menu makes a fresh one and invalidates the old.
 
