@@ -56,8 +56,9 @@ The app lives in the **menu bar** only (a cursor icon near the clock). It has no
 2. Point the phone's **camera** at the QR code, on the desktop widget or in the menu bar dropdown, and open the link.
    Or use *Copy Phone Link* from the menu and send it to the phone.
 3. The page opens in the browser. The dot in the header is **green** when connected, **red** while it retries.
-4. Optional, recommended: **Add to Home Screen** (Safari: Share > Add to Home Screen; Chrome: menu > Add to Home screen).
-   It then opens full-screen like an app, and the link keeps working because it never changes.
+4. Recommended: **Add to Home Screen** (Safari: Share > Add to Home Screen; Chrome: menu > Add to Home screen /
+   Install app). It then opens as its own app with a proper icon and **no browser URL bar**, and it remembers the
+   link, so it keeps working across restarts.
 
 The page keeps the phone's screen awake while it is open. Browsers only offer the real wake-lock API on HTTPS, so
 over plain HTTP the page plays a tiny silent video after your first touch instead. One side effect on iPhone: starting
@@ -77,7 +78,9 @@ The link contains a secret token. Anyone on your network who has it can control 
 | hold still ~0.5 s, then drag | drag (pad outline turns blue) |
 | Left / Mid / Right buttons | hold to drag; tap twice quickly for a double click |
 
-- **⛶ Fullscreen trackpad**: the whole screen becomes the pad. Tap the small pill in the top-right corner to exit.
+- **⛶ Fullscreen trackpad**: the whole screen becomes the pad, and where the browser allows it (Android Chrome, iPad,
+  iPhone on recent iOS) the browser's own bars disappear too. Tap the small pill in the top-right corner to exit.
+  For a guaranteed bar-free view on any phone, use Add to Home Screen.
 - **⌨︎ Keyboard**: a text box (every character you type is sent live, backspace works), plus esc, tab, arrows,
   enter, backspace, space, ⌘ space (Spotlight), ⌘ tab (switch apps) and ⌃⌘ F (fullscreen).
 - **Media row**: previous, play/pause, next, mute, volume down, volume up.
@@ -188,7 +191,8 @@ and the token is random on every start unless you pass `--token`. Quit the menu 
 - `app/Sources/*.swift`: the menu bar app. `Server.swift` (HTTP + WebSocket on Network.framework), `Injector.swift`
   (CGEvent injection), `Widget.swift` (QR card + desktop panel), `AppDelegate.swift` (menu, login item, IP polling).
 - `app/build.sh`, `app/Info.plist`, `app/AppIcon.icns`, `app/make_icon.py`: build script, bundle metadata, icon.
-- `index.html`: the touchpad page, bundled into the app at build time. Edit it and rebuild to change the phone UI.
+- `index.html`, `manifest.json`, `icons/`: the touchpad page, its web app manifest and home-screen icons, bundled into
+  the app at build time. Edit and rebuild to change the phone UI.
 - `server.py`, `run.sh`: the Python server.
 - `docs/`: README images.
 

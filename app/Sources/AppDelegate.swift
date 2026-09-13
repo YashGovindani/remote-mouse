@@ -14,6 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentIP = ""
     private var trusted = false
 
+    /// Files served to the phone (bundled into Resources by build.sh).
+    private static let webFiles: [String: (file: String, type: String)] = [
+        "/": ("index.html", "text/html; charset=utf-8"), "/index.html": ("index.html", "text/html; charset=utf-8"),
+        "/manifest.json": ("manifest.json", "application/manifest+json"),
+        "/icon-180.png": ("icon-180.png", "image/png"), "/icon-192.png": ("icon-192.png", "image/png"),
+        "/icon-512.png": ("icon-512.png", "image/png"),
+    ]
+
     private var token: String {
         get { defaults.string(forKey: "token") ?? "" }
         set { defaults.set(newValue, forKey: "token") }
@@ -32,9 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         currentIP = Self.localIPs().first ?? ""
         trusted = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
 
-        server = RemoteServer(port: port, token: token, injector: injector) {
-            Bundle.main.url(forResource: "index", withExtension: "html").flatMap { try? Data(contentsOf: $0) }
-                ?? Data("index.html missing from app bundle".utf8)
+        server = RemoteServer(port: port, token: token, injector: injector) { path in
+            guard let f = Self.webFiles[path], let url = Bundle.main.url(forResource: f.file, withExtension: nil),
+                  let data = try? Data(contentsOf: url) else { return nil }
+            return (data, f.type)
         }
         server.onChange = { [weak self] in self?.refresh() }
         server.start()

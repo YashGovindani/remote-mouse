@@ -7,7 +7,7 @@ final class RemoteServer {
     let port: UInt16
     var token: String
     let injector: Injector
-    let html: () -> Data
+    let resource: (String) -> (data: Data, type: String)?   // path -> file contents + content type
     let queue = DispatchQueue(label: "remote-mouse.server")
     var onChange: (() -> Void)?                 // called on the main queue whenever state or clients change
     private(set) var isRunning = false
@@ -16,8 +16,8 @@ final class RemoteServer {
     private var clients: [ObjectIdentifier: Client] = [:]
     private var keepalive: DispatchSourceTimer?
 
-    init(port: UInt16, token: String, injector: Injector, html: @escaping () -> Data) {
-        self.port = port; self.token = token; self.injector = injector; self.html = html
+    init(port: UInt16, token: String, injector: Injector, resource: @escaping (String) -> (data: Data, type: String)?) {
+        self.port = port; self.token = token; self.injector = injector; self.resource = resource
     }
 
     var phoneCount: Int { queue.sync { clients.values.filter { $0.isWebSocket }.count } }
@@ -155,8 +155,8 @@ private final class Client {
             conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in })
             isWebSocket = true
             server.clientOpened(self)
-        } else if path == "/" || path == "/index.html" {
-            sendHTTP(200, server.html(), type: "text/html; charset=utf-8")
+        } else if let r = server.resource(path) {
+            sendHTTP(200, r.data, type: r.type)
         } else {
             sendHTTP(404, Data("not found\n".utf8))
         }

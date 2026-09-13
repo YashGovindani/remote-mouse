@@ -1,13 +1,16 @@
-"""Generate AppIcon.icns: dark rounded square with a cursor arrow and a phone."""
+"""Generate AppIcon.icns (and optionally web icons): dark square with a cursor arrow and a phone.
+Usage: make_icon.py AppIcon.icns [icons_dir]"""
 import subprocess, tempfile, pathlib, sys
 from PIL import Image, ImageDraw
 
-def draw(size):
+def draw(size, web=False):
+    """macOS icon: rounded square with a margin. web=True: full-bleed square for home-screen icons."""
     S = 1024
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    m = 90  # macOS icon margin
-    d.rounded_rectangle((m, m, S - m, S - m), radius=200, fill=(28, 32, 41, 255))
+    m = 0 if web else 90  # macOS icon margin
+    radius = 0 if web else 200
+    d.rounded_rectangle((m, m, S - m, S - m), radius=radius, fill=(28, 32, 41, 255))
     # subtle gradient overlay
     ov = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
@@ -15,7 +18,7 @@ def draw(size):
         a = int(70 * (1 - i / (S - 2 * m)))
         od.line((m, m + i, S - m, m + i), fill=(79, 140, 255, a))
     mask = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((m, m, S - m, S - m), radius=200, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle((m, m, S - m, S - m), radius=radius, fill=255)
     img.paste(Image.alpha_composite(img, ov), (0, 0), mask)
     d = ImageDraw.Draw(img)
     # phone outline
@@ -29,6 +32,11 @@ def draw(size):
     return img.resize((size, size), Image.LANCZOS)
 
 out = pathlib.Path(sys.argv[1])
+if len(sys.argv) > 2:                      # web icons for Add to Home Screen
+    icons = pathlib.Path(sys.argv[2]); icons.mkdir(exist_ok=True)
+    for s in (180, 192, 512):
+        draw(s, web=True).save(icons / f"icon-{s}.png")
+    print("web icons written", icons)
 with tempfile.TemporaryDirectory() as t:
     iconset = pathlib.Path(t) / "AppIcon.iconset"
     iconset.mkdir()

@@ -16,7 +16,7 @@ done
 lipo -create build/RemoteMouse-arm64 build/RemoteMouse-x86_64 -output "$APP/Contents/MacOS/RemoteMouse"
 rm -f build/RemoteMouse-arm64 build/RemoteMouse-x86_64
 cp Info.plist "$APP/Contents/"
-cp ../index.html AppIcon.icns "$APP/Contents/Resources/"
+cp ../index.html ../manifest.json ../icons/icon-*.png AppIcon.icns "$APP/Contents/Resources/"
 # Signing identity: RM_SIGN if set, else a "Remote Mouse Dev" certificate if one exists in the keychain (see README,
 # "Local development"), else ad hoc ("-"). Ad-hoc signing changes the app identity on every build, which makes macOS
 # forget the Accessibility grant; a certificate keeps the identity stable across rebuilds.

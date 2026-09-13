@@ -20,10 +20,17 @@ import Quartz
 from AppKit import NSEvent
 from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
 from websockets.asyncio.server import serve
+from websockets.datastructures import Headers
+from websockets.http11 import Response
 
 HERE = Path(__file__).resolve().parent
+WEB_FILES = {  # path -> (file, content type)
+    "/": ("index.html", "text/html; charset=utf-8"), "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/manifest.json": ("manifest.json", "application/manifest+json"),
+    "/icon-180.png": ("icons/icon-180.png", "image/png"), "/icon-192.png": ("icons/icon-192.png", "image/png"),
+    "/icon-512.png": ("icons/icon-512.png", "image/png"),
+}
 DEBUG = os.environ.get("RM_DEBUG") == "1"   # print every event received from the phone
-INDEX = HERE / "index.html"
 
 # --------------------------------------------------------------------------- input injection
 
@@ -247,11 +254,11 @@ def main():
             if token and parse_qs(u.query).get("k", [None])[0] != token:
                 return conn.respond(HTTPStatus.UNAUTHORIZED, "bad token\n")
             return None  # proceed with the WebSocket handshake
-        if u.path in ("/", "/index.html"):
-            resp = conn.respond(HTTPStatus.OK, INDEX.read_text())
-            resp.headers["Content-Type"] = "text/html; charset=utf-8"
-            resp.headers["Cache-Control"] = "no-store"
-            return resp
+        if u.path in WEB_FILES:
+            file, ctype = WEB_FILES[u.path]
+            body = (HERE / file).read_bytes()
+            return Response(HTTPStatus.OK, "OK", Headers([("Content-Type", ctype), ("Content-Length", str(len(body))),
+                                                          ("Cache-Control", "no-store"), ("Connection", "close")]), body)
         return conn.respond(HTTPStatus.NOT_FOUND, "not found\n")
 
     async def handler(ws):

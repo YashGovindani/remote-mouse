@@ -7,6 +7,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-title" content="Remote Mouse">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <title>Remote Mouse</title>
 <style>
   :root {
@@ -171,7 +174,9 @@
   $('inv').onchange = () => { cfg.invert = $('inv').checked; save(); };
 
   // ------------------------------------------------------------ connection
-  const token = new URLSearchParams(location.search).get('k') || '';
+  // token from the link; a home-screen app opens "/" without it, so fall back to the last one that worked
+  let stored = ''; try { stored = localStorage.getItem('rm-token') || ''; } catch {}
+  const token = new URLSearchParams(location.search).get('k') || stored;
   let ws = null, retry = 500;
   const setStatus = (ok, text) => {
     document.querySelectorAll('.dot').forEach(d => d.classList.toggle('on', ok));
@@ -179,7 +184,10 @@
   };
   function connect() {
     ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(token)}`);
-    ws.onopen = () => { retry = 500; setStatus(true, `connected to ${location.hostname}`); };
+    ws.onopen = () => {
+      retry = 500; setStatus(true, `connected to ${location.hostname}`);
+      try { localStorage.setItem('rm-token', token); } catch {}
+    };
     ws.onclose = () => { setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000); };
     ws.onerror = () => ws.close();
   }
@@ -282,13 +290,23 @@
   pad.addEventListener('touchcancel', end, { passive: false });
 
   // ------------------------------------------------------------ fullscreen trackpad
+  // browser fullscreen hides the URL bar where supported (Android Chrome, iPad, iPhone on newer iOS);
+  // a page added to the home screen has no URL bar to begin with
+  const fsRoot = document.documentElement;
+  const enterFs = () => {
+    const f = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
+    if (!f) return;
+    try { const p = f.call(fsRoot); if (p && p.catch) p.catch(() => {}); } catch {}
+  };
+  const exitFs = () => {
+    const f = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!f || !(document.fullscreenElement || document.webkitFullscreenElement)) return;
+    try { const p = f.call(document); if (p && p.catch) p.catch(() => {}); } catch {}
+  };
   const setFs = on => {
     cfg.fs = on; save();
     document.body.classList.toggle('fs', on); $('fsBtn').classList.toggle('active', on);
-    try {
-      if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
-      else if (!on && document.fullscreenElement) document.exitFullscreen();
-    } catch {}
+    if (on) enterFs(); else exitFs();
   };
   $('fsBtn').onclick = () => setFs(true);
   const exit = $('exitfs');
