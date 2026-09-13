@@ -4,6 +4,13 @@ Control this Mac's cursor, clicks, scrolling, typing and media keys from a phone
 No app to install on the phone: the Mac serves a touchpad web page, the phone talks to it over a WebSocket,
 and the Mac injects the events with CoreGraphics.
 
+<p align="center"><img src="docs/widget.png" width="560" alt="Desktop widget showing the QR code"></p>
+<p align="center">
+  <img src="docs/phone.png" width="270" alt="Phone touchpad page">
+  &nbsp;&nbsp;
+  <img src="docs/phone-keyboard.png" width="270" alt="Phone page with keyboard panel and settings open">
+</p>
+
 ## The app (`~/Applications/Remote Mouse.app`)
 
 A native menu bar app, built from `app/` with the command line tools only (no Xcode):
@@ -64,3 +71,7 @@ to the side you turned the phone. Add the page to the phone's home screen for a 
 `{"t":"move","dx":..,"dy":..}` · `{"t":"click","b":"left|right|middle","n":1|2}` · `{"t":"down"/"up","b":..,"n":..}` ·
 `{"t":"scroll","dx":..,"dy":..,"mods":["ctrl"]}` · `{"t":"text","s":"hello"}` · `{"t":"key","code":"enter","mods":["cmd"]}` ·
 `{"t":"media","name":"play|next|prev|volup|voldown|mute"}` · `{"t":"ping"}` → `{"t":"pong"}`
+
+## License
+
+MIT, see `LICENSE`.
