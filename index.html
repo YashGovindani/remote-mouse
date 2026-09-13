@@ -53,6 +53,8 @@
     background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 22px 22px; }
   #pad .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
     color: var(--dim); font-size: 13px; pointer-events: none; line-height: 1.8; padding: 20px; }
+  #pad .hint [hidden] { display: none; }
+  #pad #hintNote { font-size: 15px; font-weight: 600; color: var(--accent); }
   #pad.drag { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
   #pad.drag .hint { color: var(--accent); }
   #exitfs { display: none; position: absolute; top: calc(var(--sat) + 10px); right: calc(var(--sar) + 10px); z-index: 5;
@@ -115,7 +117,10 @@
     <div class="icon" id="setBtn">⚙︎</div>
   </header>
   <div id="pad">
-    <div class="hint" id="hint">move · tap: left click · two-finger tap: right click<br>two fingers: scroll · hold still to drag<br>three fingers: swipe ← → desktops<br>↑ mission control · ↓ app exposé</div>
+    <div class="hint" id="hint">
+      <div id="hintText">move · tap: left click · two-finger tap: right click<br>two fingers: scroll · hold still to drag<br>three fingers: swipe ← → desktops<br>↑ mission control · ↓ app exposé</div>
+      <div id="hintNote" hidden></div>
+    </div>
     <div id="exitfs"><span class="dot"></span> exit fullscreen</div>
   </div>
 </main>
@@ -255,11 +260,14 @@
   // 1 finger: move, tap = left click, double tap, hold still = drag.  2 fingers: scroll, tap = right click.
   // 3 fingers: swipe left/right = next/previous desktop, swipe up = Mission Control, swipe down = App Exposé.
   const pad = $('pad');
-  const hintEl = $('hint'), hintDefault = hintEl.innerHTML;
+  // the hint lines and the short note are two separate elements that get toggled, never rewritten:
+  // Safari drops the first line of a grid-centred text block when its contents are replaced
+  const hintText = $('hintText'), hintNote = $('hintNote');
   let noteT = null;
   const note = (text, ms = 4000) => {
-    hintEl.textContent = text; clearTimeout(noteT);
-    noteT = setTimeout(() => { hintEl.innerHTML = hintDefault; }, ms);
+    hintNote.textContent = text; hintText.hidden = true; hintNote.hidden = false;
+    clearTimeout(noteT);
+    noteT = setTimeout(() => { hintNote.hidden = true; hintText.hidden = false; }, ms);
   };
   const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
   const touches = new Map();                           // id -> {x, y, sx, sy}  (current + start position)
