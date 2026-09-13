@@ -99,7 +99,7 @@
     <div class="icon" id="setBtn">⚙︎</div>
   </header>
   <div id="pad">
-    <div class="hint" id="hint">move · tap: left click · two-finger tap: right click<br>two fingers: scroll · hold still to drag</div>
+    <div class="hint" id="hint">move · tap: left click · two-finger tap: right click<br>two fingers: scroll · hold still to drag<br>three fingers: swipe ← → desktops · ↑ mission control · ↓ app exposé</div>
     <div id="exitfs"><span class="dot"></span> exit fullscreen</div>
   </div>
 </main>
@@ -199,13 +199,21 @@
 
   // ------------------------------------------------------------ touchpad
   // 1 finger: move, tap = left click, double tap, hold still = drag.  2 fingers: scroll, tap = right click.
+  // 3 fingers: swipe left/right = next/previous desktop, swipe up = Mission Control, swipe down = App Exposé.
   const pad = $('pad');
+  const hintEl = $('hint'), hintDefault = hintEl.innerHTML;
+  let noteT = null;
+  const note = (text, ms = 4000) => {
+    hintEl.textContent = text; clearTimeout(noteT);
+    noteT = setTimeout(() => { hintEl.innerHTML = hintDefault; }, ms);
+  };
   const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
   const touches = new Map();                           // id -> {x, y, sx, sy}  (current + start position)
   let last = null, startT = 0, maxFingers = 0, maxDisp = 0;
   let lastTap = 0, longPress = null, dragging = false;
   let scrolling = false, scrollAcc = 0, sx = 0, sy = 0;
-  const TAP_MS = 350, TAP_PX = { 1: 10, 2: 18 }, SCROLL_LOCK_PX = 12, HOLD_PX = 8;
+  let swiped = false, swx = 0, swy = 0;
+  const TAP_MS = 350, TAP_PX = { 1: 10, 2: 18 }, SCROLL_LOCK_PX = 12, HOLD_PX = 8, SWIPE_PX = 40;
 
   // "rotate input" for phones with rotation lock held sideways: map finger motion to the Mac's axes
   const rotate = (dx, dy) => cfg.rot === 'left' ? [-dy, dx] : cfg.rot === 'right' ? [dy, -dx] : [dx, dy];
@@ -240,6 +248,7 @@
     if (n >= 2) clearTimeout(longPress);
     maxFingers = Math.max(maxFingers, n);
     scrolling = false; scrollAcc = sx = sy = 0;
+    swiped = false; swx = swy = 0;
     last = centroid();
   }, { passive: false });
 
@@ -259,6 +268,7 @@
       const gain = cfg.sens * (1 + Math.min(sp / 10, 2));          // mild acceleration
       send({ t: 'move', dx: +(dx * gain).toFixed(2), dy: +(dy * gain).toFixed(2) });
     } else if (n === 2) {                                          // scroll, once the fingers have clearly moved
+      if (swiped) return;                                          // fingers left over from a three-finger swipe
       scrollAcc += sp;
       if (!scrolling && scrollAcc > SCROLL_LOCK_PX) scrolling = true;
       if (!scrolling) return;
@@ -266,7 +276,19 @@
       sx += dx * k; sy += dy * k;
       const ix = Math.trunc(sx), iy = Math.trunc(sy);
       if (ix || iy) { sx -= ix; sy -= iy; send({ t: 'scroll', dx: ix, dy: iy }); }
-    }                                                              // 3+ fingers: nothing
+    } else if (!swiped) {                                          // 3+ fingers: one swipe per touch
+      swx += dx; swy += dy;
+      if (Math.hypot(swx, swy) < SWIPE_PX) return;
+      swiped = true;
+      if (Math.abs(swx) > Math.abs(swy)) {                         // content follows the fingers, like the Mac trackpad
+        const code = swx > 0 ? 'left' : 'right';
+        send({ t: 'key', code, mods: ['ctrl'] }); note(code === 'left' ? '◀ desktop' : 'desktop ▶', 700);
+      } else {
+        const code = swy < 0 ? 'up' : 'down';                      // up: Mission Control, down: App Exposé
+        send({ t: 'key', code, mods: ['ctrl'] }); note(code === 'up' ? 'mission control' : 'app exposé', 700);
+      }
+      vibrate(15);
+    }
   }, { passive: false });
 
   const end = e => {
@@ -284,7 +306,7 @@
         send({ t: 'click', b: 'left', n });
       } else if (maxFingers === 2) send({ t: 'click', b: 'right' });
     }
-    maxFingers = 0; maxDisp = 0; scrolling = false; last = null;
+    maxFingers = 0; maxDisp = 0; scrolling = false; swiped = false; last = null;
   };
   pad.addEventListener('touchend', end, { passive: false });
   pad.addEventListener('touchcancel', end, { passive: false });
@@ -292,9 +314,6 @@
   // ------------------------------------------------------------ fullscreen trackpad
   // browser fullscreen hides the browser's own bars where supported (Android Chrome, iPad). iPhone Safari refuses
   // it for anything but a <video>, so there the only bar-free option is Add to Home Screen.
-  const hintEl = $('hint'), hintDefault = hintEl.innerHTML;
-  let noteT = null;
-  const note = text => { hintEl.textContent = text; clearTimeout(noteT); noteT = setTimeout(() => { hintEl.innerHTML = hintDefault; }, 4000); };
   const HOME_SCREEN_TIP = 'This browser will not go fullscreen. Add the page to your Home Screen for a view without browser bars.';
   const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const fsRoot = document.documentElement;

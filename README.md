@@ -76,6 +76,8 @@ The link contains a secret token. Anyone on your network who has it can control 
 | two-finger tap | right click |
 | two-finger drag | scroll |
 | hold still ~0.5 s, then drag | drag (pad outline turns blue) |
+| three-finger swipe left / right | next / previous desktop (same as the buttons; content follows the fingers) |
+| three-finger swipe up / down | Mission Control / App Exposé (all windows of the current app) |
 | Left / Mid / Right buttons | hold to drag; tap twice quickly for a double click |
 
 - **⛶ Fullscreen trackpad**: the whole screen becomes the pad, and where the browser allows it (Android Chrome, iPad)
