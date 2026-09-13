@@ -77,6 +77,8 @@ The link contains a secret token. Anyone on your network who has it can control 
 - **⌨︎ Keyboard**: a text box (every character you type is sent live, backspace works), plus esc, tab, arrows,
   enter, backspace, space, ⌘ space (Spotlight), ⌘ tab (switch apps) and ⌃⌘ F (fullscreen).
 - **Media row**: previous, play/pause, next, mute, volume down, volume up.
+- **Desktops row**: ◀ desktop, mission control, desktop ▶. These send the standard Ctrl+←, Ctrl+↑ and Ctrl+→
+  shortcuts, which are on by default under *System Settings > Keyboard > Keyboard Shortcuts > Mission Control*.
 - **⚙︎ Settings**: pointer speed, scroll speed, invert scroll, rotate input. Saved on the phone.
 - **Landscape**: turn the phone and the controls move to a column on the right, the pad takes the rest.
   If the phone has rotation lock on, set *Rotate input* to the side you turned it so finger motion still maps correctly.
