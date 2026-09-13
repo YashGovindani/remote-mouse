@@ -81,8 +81,9 @@ final class QRCard: NSView {
         }
         qr.frame = qrBox.bounds.insetBy(dx: 8, dy: 8)
         hint.frame = NSRect(x: 12, y: qrBox.frame.minY - 22, width: w - 24, height: 16)
-        urlLabel.frame = NSRect(x: 12, y: hint.frame.minY - 32, width: w - 24, height: 28)
-        status.frame = NSRect(x: 12, y: urlLabel.frame.minY - 16, width: w - 24, height: 18)
+        urlLabel.frame = NSRect(x: 6, y: hint.frame.minY - 32, width: w - 12, height: 28)
+        let statusY = style == .desktop ? 14 : urlLabel.frame.minY - 16      // desktop card: pinned to the bottom edge
+        status.frame = NSRect(x: 12, y: statusY, width: w - 24, height: 18)
     }
 
     override func viewDidChangeEffectiveAppearance() { applyAppearance() }
@@ -96,8 +97,8 @@ final class QRCard: NSView {
 
     func update(url: String, statusText: String, ok: Bool) {
         qr.image = QR.image(url, size: qr.bounds.width)
-        // zero-width space before the token: if the link has to wrap, it wraps there instead of mid-token
-        urlLabel.stringValue = url.replacingOccurrences(of: "?k=", with: "\u{200B}?k=")
+        // if the link has to wrap, wrap right before "?k=" (zero-width space) and nowhere inside it (word joiners)
+        urlLabel.stringValue = url.replacingOccurrences(of: "?k=", with: "\u{200B}?\u{2060}k\u{2060}=\u{2060}")
         let para = NSMutableParagraphStyle(); para.alignment = .center
         let dot = ok ? NSColor(calibratedRed: 0.24, green: 0.86, blue: 0.52, alpha: 1)
                      : NSColor(calibratedRed: 1, green: 0.36, blue: 0.36, alpha: 1)
