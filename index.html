@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1115">
+<title>Remote Mouse</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --pad: #1c2029; --line: #2a2f3a;
+    --fg: #e6e8ee; --dim: #8b91a0; --accent: #4f8cff; --ok: #3ddc84; --bad: #ff5c5c;
+    --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 15px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; height: 100dvh; padding: var(--sat) var(--sar) 0 var(--sal); }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 8px var(--bad); flex: none; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  header .title { font-weight: 600; letter-spacing: .2px; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  .icon { width: 40px; height: 40px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line);
+    display: grid; place-items: center; font-size: 18px; color: var(--fg); flex: none; }
+  .icon.active { border-color: var(--accent); color: var(--accent); }
+
+  #pad { flex: 1; margin: 0 10px; border-radius: 18px; background: var(--pad); border: 1px solid var(--line);
+    touch-action: none; position: relative; overflow: hidden;
+    background-image: radial-gradient(#2b3140 1px, transparent 1px); background-size: 22px 22px; }
+  #pad .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: var(--dim); font-size: 13px; pointer-events: none; line-height: 1.8; padding: 20px; }
+  #pad.drag { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+  #pad.drag .hint { color: var(--accent); }
+  #exitfs { display: none; position: absolute; top: calc(var(--sat) + 10px); right: calc(var(--sar) + 10px); z-index: 5;
+    padding: 8px 12px; border-radius: 999px; background: rgba(23,26,33,.9); border: 1px solid var(--line);
+    color: var(--dim); font-size: 12px; align-items: center; gap: 8px; }
+
+  aside { flex: none; }
+  .row { display: flex; gap: 8px; padding: 8px 10px 0; }
+  .btn { flex: 1; min-height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line);
+    color: var(--fg); font-size: 15px; display: grid; place-items: center; touch-action: none; }
+  .btn:active, .btn.down { background: #262b36; border-color: var(--accent); }
+  .btn.sm { min-height: 44px; font-size: 14px; flex: 1 1 0; padding: 0 4px; }
+  .btn.key { font-size: 13px; }
+  .media .btn { font-size: 18px; }
+
+  #kb { display: none; padding-bottom: 4px; }
+  #kb.open { display: block; }
+  #typebox { width: calc(100% - 20px); margin: 8px 10px 0; min-height: 48px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--fg); font-size: 16px; padding: 12px 14px; outline: none;
+    -webkit-user-select: text; user-select: text; }
+  #typebox:focus { border-color: var(--accent); }
+
+  #settings { display: none; padding: 4px 14px 8px; color: var(--dim); font-size: 13px; }
+  #settings.open { display: block; }
+  #settings label { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  #settings label span { width: 100px; flex: none; }
+  #settings input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  #settings input[type=checkbox] { accent-color: var(--accent); width: 20px; height: 20px; }
+  #settings output { width: 36px; text-align: right; color: var(--fg); }
+  #settings select { flex: 1; min-width: 0; background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+  footer { height: calc(8px + var(--sab)); flex: none; }
+
+  /* landscape: controls become a scrollable column on the right */
+  @media (orientation: landscape) and (min-width: 560px) {
+    body { flex-direction: row; }
+    aside { width: 250px; overflow-y: auto; padding-bottom: var(--sab); }
+    #pad { margin: 0 0 10px 10px; }
+    .row { flex-wrap: wrap; }
+    .row .btn { flex: 1 1 28%; }
+    .row .btn[data-b="middle"] { flex: 1 1 28%; }
+    footer { display: none; }
+  }
+
+  /* fullscreen trackpad */
+  body.fs { padding: 0; }
+  body.fs header, body.fs aside, body.fs footer { display: none; }
+  body.fs #pad { margin: 0; border-radius: 0; border: none; }
+  body.fs #exitfs { display: flex; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="dot"></div>
+    <div><div class="title">Remote Mouse</div><div class="sub" id="status">connecting…</div></div>
+    <div style="flex:1"></div>
+    <div class="icon" id="fsBtn" title="fullscreen trackpad">⛶</div>
+    <div class="icon" id="kbBtn">⌨︎</div>
+    <div class="icon" id="setBtn">⚙︎</div>
+  </header>
+  <div id="pad">
+    <div class="hint" id="hint">move · tap: left click · two-finger tap: right click<br>two fingers: scroll · hold still to drag</div>
+    <div id="exitfs"><span class="dot"></span> exit fullscreen</div>
+  </div>
+</main>
+
+<aside id="controls">
+  <div id="settings">
+    <label><span>Pointer speed</span><input type="range" id="sens" min="0.5" max="4" step="0.1"><output id="sensOut"></output></label>
+    <label><span>Scroll speed</span><input type="range" id="scr" min="0.5" max="5" step="0.1"><output id="scrOut"></output></label>
+    <label><span>Invert scroll</span><input type="checkbox" id="inv"></label>
+    <label><span>Rotate input</span><select id="rot"><option value="off">off (auto-rotate)</option><option value="left">phone turned left</option><option value="right">phone turned right</option></select></label>
+  </div>
+
+  <div class="row">
+    <div class="btn" data-b="left">Left</div>
+    <div class="btn" data-b="middle" style="flex:.6">Mid</div>
+    <div class="btn" data-b="right">Right</div>
+  </div>
+
+  <div class="row media">
+    <div class="btn sm" data-media="prev">⏮</div>
+    <div class="btn sm" data-media="play">⏯</div>
+    <div class="btn sm" data-media="next">⏭</div>
+    <div class="btn sm" data-media="mute">🔇</div>
+    <div class="btn sm" data-media="voldown">🔉</div>
+    <div class="btn sm" data-media="volup">🔊</div>
+  </div>
+
+  <div id="kb">
+    <div class="row">
+      <div class="btn sm key" data-key="escape">esc</div>
+      <div class="btn sm key" data-key="tab">tab</div>
+      <div class="btn sm key" data-key="up">↑</div>
+      <div class="btn sm key" data-key="down">↓</div>
+      <div class="btn sm key" data-key="left">←</div>
+      <div class="btn sm key" data-key="right">→</div>
+      <div class="btn sm key" data-key="backspace">⌫</div>
+      <div class="btn sm key" data-key="enter">⏎</div>
+    </div>
+    <div class="row">
+      <div class="btn sm key" data-key="space">space</div>
+      <div class="btn sm key" data-key="space" data-mods="cmd">⌘ space</div>
+      <div class="btn sm key" data-key="tab" data-mods="cmd">⌘ tab</div>
+      <div class="btn sm key" data-key="f" data-mods="cmd,ctrl">⛶ full</div>
+    </div>
+    <input id="typebox" placeholder="type here…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  </div>
+</aside>
+<footer></footer>
+
+<script>
+(() => {
+  // ------------------------------------------------------------ settings
+  const cfg = { sens: 1.6, scroll: 2, invert: false, rot: 'off', fs: false };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('rm-cfg') || '{}')); } catch {}
+  const save = () => { try { localStorage.setItem('rm-cfg', JSON.stringify(cfg)); } catch {} };
+  const $ = id => document.getElementById(id);
+  const bindRange = (id, key, out) => {
+    const el = $(id); el.value = cfg[key]; $(out).value = cfg[key].toFixed(1);
+    el.oninput = () => { cfg[key] = +el.value; $(out).value = cfg[key].toFixed(1); save(); };
+  };
+  const bindSelect = (id, key) => { const el = $(id); el.value = cfg[key]; el.onchange = () => { cfg[key] = el.value; save(); }; };
+  bindRange('sens', 'sens', 'sensOut');
+  bindRange('scr', 'scroll', 'scrOut');
+  bindSelect('rot', 'rot');
+  $('inv').checked = cfg.invert;
+  $('inv').onchange = () => { cfg.invert = $('inv').checked; save(); };
+
+  // ------------------------------------------------------------ connection
+  const token = new URLSearchParams(location.search).get('k') || '';
+  let ws = null, retry = 500;
+  const setStatus = (ok, text) => {
+    document.querySelectorAll('.dot').forEach(d => d.classList.toggle('on', ok));
+    $('status').textContent = text;
+  };
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(token)}`);
+    ws.onopen = () => { retry = 500; setStatus(true, `connected to ${location.hostname}`); };
+    ws.onclose = () => { setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000); };
+    ws.onerror = () => ws.close();
+  }
+  const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+  connect();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (!ws || ws.readyState > 1)) connect();
+  });
+
+  // ------------------------------------------------------------ touchpad
+  // 1 finger: move, tap = left click, double tap, hold still = drag.  2 fingers: scroll, tap = right click.
+  const pad = $('pad');
+  const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
+  const touches = new Map();                           // id -> {x, y, sx, sy}  (current + start position)
+  let last = null, startT = 0, maxFingers = 0, maxDisp = 0;
+  let lastTap = 0, longPress = null, dragging = false;
+  let scrolling = false, scrollAcc = 0, sx = 0, sy = 0;
+  const TAP_MS = 350, TAP_PX = { 1: 10, 2: 18 }, SCROLL_LOCK_PX = 12, HOLD_PX = 8;
+
+  // "rotate input" for phones with rotation lock held sideways: map finger motion to the Mac's axes
+  const rotate = (dx, dy) => cfg.rot === 'left' ? [-dy, dx] : cfg.rot === 'right' ? [dy, -dx] : [dx, dy];
+  const centroid = () => {
+    let x = 0, y = 0; for (const t of touches.values()) { x += t.x; y += t.y; }
+    return { x: x / touches.size, y: y / touches.size };
+  };
+  const track = e => {
+    for (const t of e.changedTouches) {
+      const cur = touches.get(t.identifier);
+      if (cur) {
+        cur.x = t.clientX; cur.y = t.clientY;
+        maxDisp = Math.max(maxDisp, Math.hypot(cur.x - cur.sx, cur.y - cur.sy));   // how far any finger travelled
+      } else if (e.type === 'touchstart') {
+        touches.set(t.identifier, { x: t.clientX, y: t.clientY, sx: t.clientX, sy: t.clientY });
+      }
+    }
+  };
+
+  pad.addEventListener('touchstart', e => {
+    e.preventDefault(); track(e);
+    const n = touches.size;
+    if (n === 1 && !dragging) {
+      startT = performance.now(); maxFingers = 1; maxDisp = 0;
+      clearTimeout(longPress);
+      longPress = setTimeout(() => {
+        if (maxDisp < HOLD_PX && touches.size === 1 && !dragging) {
+          dragging = true; send({ t: 'down', b: 'left' }); pad.classList.add('drag'); vibrate(30);
+        }
+      }, 450);
+    }
+    if (n >= 2) clearTimeout(longPress);
+    maxFingers = Math.max(maxFingers, n);
+    scrolling = false; scrollAcc = sx = sy = 0;
+    last = centroid();
+  }, { passive: false });
+
+  pad.addEventListener('touchmove', e => {
+    e.preventDefault(); track(e);
+    const n = touches.size;
+    if (!n) return;
+    if (!last) { last = centroid(); return; }
+    const c = centroid();
+    const [dx, dy] = rotate(c.x - last.x, c.y - last.y); last = c;
+    const sp = Math.hypot(dx, dy);
+    if (maxDisp >= HOLD_PX) clearTimeout(longPress);
+    if (!sp) return;
+
+    if (dragging || n === 1) {                                     // pointer move (or drag)
+      if (maxFingers > 1 && !dragging) return;                     // finger left over from a two-finger touch: don't nudge the cursor
+      const gain = cfg.sens * (1 + Math.min(sp / 10, 2));          // mild acceleration
+      send({ t: 'move', dx: +(dx * gain).toFixed(2), dy: +(dy * gain).toFixed(2) });
+    } else if (n === 2) {                                          // scroll, once the fingers have clearly moved
+      scrollAcc += sp;
+      if (!scrolling && scrollAcc > SCROLL_LOCK_PX) scrolling = true;
+      if (!scrolling) return;
+      const k = cfg.scroll * (cfg.invert ? -1 : 1);
+      sx += dx * k; sy += dy * k;
+      const ix = Math.trunc(sx), iy = Math.trunc(sy);
+      if (ix || iy) { sx -= ix; sy -= iy; send({ t: 'scroll', dx: ix, dy: iy }); }
+    }                                                              // 3+ fingers: nothing
+  }, { passive: false });
+
+  const end = e => {
+    e.preventDefault(); track(e);
+    for (const t of e.changedTouches) touches.delete(t.identifier);
+    if (touches.size) { last = centroid(); return; }
+    clearTimeout(longPress);
+    const dur = performance.now() - startT;
+    if (dragging) {
+      dragging = false; send({ t: 'up', b: 'left' }); pad.classList.remove('drag');
+    } else if (!scrolling && dur < TAP_MS && maxDisp < (TAP_PX[maxFingers] || 0)) {
+      if (maxFingers === 1) {                                      // left click, double tap = double click
+        const now = performance.now(), n = now - lastTap < 350 ? 2 : 1;
+        lastTap = n === 2 ? 0 : now;
+        send({ t: 'click', b: 'left', n });
+      } else if (maxFingers === 2) send({ t: 'click', b: 'right' });
+    }
+    maxFingers = 0; maxDisp = 0; scrolling = false; last = null;
+  };
+  pad.addEventListener('touchend', end, { passive: false });
+  pad.addEventListener('touchcancel', end, { passive: false });
+
+  // ------------------------------------------------------------ fullscreen trackpad
+  const setFs = on => {
+    cfg.fs = on; save();
+    document.body.classList.toggle('fs', on); $('fsBtn').classList.toggle('active', on);
+    try {
+      if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+      else if (!on && document.fullscreenElement) document.exitFullscreen();
+    } catch {}
+  };
+  $('fsBtn').onclick = () => setFs(true);
+  const exit = $('exitfs');
+  ['touchstart', 'touchmove', 'touchend'].forEach(t => exit.addEventListener(t, e => { e.stopPropagation(); e.preventDefault(); }, { passive: false }));
+  exit.addEventListener('touchend', () => setFs(false));
+  exit.addEventListener('click', () => setFs(false));
+  if (cfg.fs) { document.body.classList.add('fs'); $('fsBtn').classList.add('active'); }   // no requestFullscreen without a user gesture
+
+  // ------------------------------------------------------------ buttons
+  const lastPress = {};
+  document.querySelectorAll('[data-b]').forEach(el => {
+    const b = el.dataset.b;
+    el.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const now = performance.now(), n = now - (lastPress[b] || 0) < 350 ? 2 : 1;
+      lastPress[b] = n === 2 ? 0 : now; el._n = n;
+      el.classList.add('down'); send({ t: 'down', b, n });
+    }, { passive: false });
+    const up = e => { e.preventDefault(); el.classList.remove('down'); send({ t: 'up', b, n: el._n || 1 }); };
+    el.addEventListener('touchend', up, { passive: false });
+    el.addEventListener('touchcancel', up, { passive: false });
+  });
+  const tapAction = (sel, fn) => document.querySelectorAll(sel).forEach(el => {
+    el.addEventListener('touchstart', e => { e.preventDefault(); el.classList.add('down'); fn(el); }, { passive: false });
+    const up = e => { e.preventDefault(); el.classList.remove('down'); };
+    el.addEventListener('touchend', up, { passive: false });
+    el.addEventListener('touchcancel', up, { passive: false });
+    el.addEventListener('click', () => fn(el));           // desktop browsers (no touch events)
+  });
+  tapAction('[data-media]', el => send({ t: 'media', name: el.dataset.media }));
+  tapAction('[data-key]', el => send({ t: 'key', code: el.dataset.key, mods: (el.dataset.mods || '').split(',').filter(Boolean) }));
+
+  // ------------------------------------------------------------ keyboard panel
+  const kb = $('kb'), box = $('typebox'), ZW = '​';
+  $('kbBtn').onclick = () => {
+    kb.classList.toggle('open'); $('kbBtn').classList.toggle('active');
+    if (kb.classList.contains('open')) { box.value = ZW; box.focus(); box.setSelectionRange(1, 1); }
+    else box.blur();
+  };
+  $('setBtn').onclick = () => { $('settings').classList.toggle('open'); $('setBtn').classList.toggle('active'); };
+  box.addEventListener('focus', () => { box.value = ZW; requestAnimationFrame(() => box.setSelectionRange(1, 1)); });
+  box.addEventListener('input', e => {
+    if (e.isComposing || e.inputType === 'insertCompositionText') return;
+    const v = box.value;
+    if (!v.includes(ZW)) send({ t: 'key', code: 'backspace' });
+    const typed = v.replace(ZW, '');
+    if (typed) send({ t: 'text', s: typed });
+    box.value = ZW; box.setSelectionRange(1, 1);
+  });
+  box.addEventListener('compositionend', () => {
+    const typed = box.value.replace(ZW, '');
+    if (typed) send({ t: 'text', s: typed });
+    box.value = ZW; box.setSelectionRange(1, 1);
+  });
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); send({ t: 'key', code: 'enter' }); }
+    else if (e.key === 'Tab') { e.preventDefault(); send({ t: 'key', code: 'tab' }); }
+    else if (e.key === 'Escape') { e.preventDefault(); send({ t: 'key', code: 'escape' }); }
+  });
+
+  // keep the phone screen awake while the page is open
+  const wake = async () => { try { await navigator.wakeLock?.request('screen'); } catch {} };
+  wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+})();
+</script>
+</body>
+</html>
