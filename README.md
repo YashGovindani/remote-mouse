@@ -78,9 +78,9 @@ The link contains a secret token. Anyone on your network who has it can control 
 | hold still ~0.5 s, then drag | drag (pad outline turns blue) |
 | Left / Mid / Right buttons | hold to drag; tap twice quickly for a double click |
 
-- **⛶ Fullscreen trackpad**: the whole screen becomes the pad, and where the browser allows it (Android Chrome, iPad,
-  iPhone on recent iOS) the browser's own bars disappear too. Tap the small pill in the top-right corner to exit.
-  For a guaranteed bar-free view on any phone, use Add to Home Screen.
+- **⛶ Fullscreen trackpad**: the whole screen becomes the pad, and where the browser allows it (Android Chrome, iPad)
+  the browser's own bars disappear too. iPhone Safari refuses page fullscreen, so there the page tells you to use
+  Add to Home Screen instead, which opens without any browser bars. Tap the small pill in the top-right corner to exit.
 - **⌨︎ Keyboard**: a text box (every character you type is sent live, backspace works), plus esc, tab, arrows,
   enter, backspace, space, ⌘ space (Spotlight), ⌘ tab (switch apps) and ⌃⌘ F (fullscreen).
 - **Media row**: previous, play/pause, next, mute, volume down, volume up.

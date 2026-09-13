@@ -290,13 +290,22 @@
   pad.addEventListener('touchcancel', end, { passive: false });
 
   // ------------------------------------------------------------ fullscreen trackpad
-  // browser fullscreen hides the URL bar where supported (Android Chrome, iPad, iPhone on newer iOS);
-  // a page added to the home screen has no URL bar to begin with
+  // browser fullscreen hides the browser's own bars where supported (Android Chrome, iPad). iPhone Safari refuses
+  // it for anything but a <video>, so there the only bar-free option is Add to Home Screen.
+  const hintEl = $('hint'), hintDefault = hintEl.innerHTML;
+  let noteT = null;
+  const note = text => { hintEl.textContent = text; clearTimeout(noteT); noteT = setTimeout(() => { hintEl.innerHTML = hintDefault; }, 4000); };
+  const HOME_SCREEN_TIP = 'This browser will not go fullscreen. Add the page to your Home Screen for a view without browser bars.';
+  const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const fsRoot = document.documentElement;
   const enterFs = () => {
+    if (isStandalone()) return;                               // home-screen app: no browser bars to hide
     const f = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
-    if (!f) return;
-    try { const p = f.call(fsRoot); if (p && p.catch) p.catch(() => {}); } catch {}
+    if (!f) { note(HOME_SCREEN_TIP); return; }
+    try {
+      const p = f.call(fsRoot);
+      if (p && p.catch) p.catch(() => note(HOME_SCREEN_TIP));
+    } catch { note(HOME_SCREEN_TIP); }
   };
   const exitFs = () => {
     const f = document.exitFullscreen || document.webkitExitFullscreen;
