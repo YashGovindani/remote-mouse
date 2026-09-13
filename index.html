@@ -108,7 +108,7 @@
 <main>
   <header>
     <div class="dot"></div>
-    <div><div class="title">Remote Mouse</div><div class="sub" id="status">connecting…</div></div>
+    <div id="titlebox"><div class="title">Remote Mouse</div><div class="sub" id="status">connecting…</div></div>
     <div style="flex:1"></div>
     <div class="icon" id="fsBtn" title="fullscreen trackpad">⛶</div>
     <div class="icon" id="kbBtn">⌨︎</div>
@@ -204,21 +204,45 @@
   applyTheme();
 
   // ------------------------------------------------------------ connection
-  // token from the link; a home-screen app opens "/" without it, so fall back to the last one that worked
+  // token from the link, else the last one that worked on this device (a home-screen app may open without one)
   let stored = ''; try { stored = localStorage.getItem('rm-token') || ''; } catch {}
   const token = new URLSearchParams(location.search).get('k') || stored;
-  let ws = null, retry = 500;
+  // the manifest fetched with a valid token gets a start_url that includes it, so Add to Home Screen keeps the link
+  // (iOS home-screen apps have their own storage, so they cannot borrow the token Safari remembered)
+  const manifestLink = document.querySelector('link[rel=manifest]');
+  if (manifestLink && token) manifestLink.href = '/manifest.json?k=' + encodeURIComponent(token);
+  let ws = null, retry = 500, needLink = false;
   const setStatus = (ok, text) => {
     document.querySelectorAll('.dot').forEach(d => d.classList.toggle('on', ok));
     $('status').textContent = text;
   };
+  const askForLink = () => {
+    const v = prompt('Paste the phone link from the Mac (or just the code after k=):', '');
+    if (!v) return;
+    const m = v.match(/[?&]k=([^&\s]+)/);
+    const t = (m ? m[1] : v).trim();
+    if (!t) return;
+    try { localStorage.setItem('rm-token', t); } catch {}
+    location.href = '/?k=' + encodeURIComponent(t);
+  };
+  $('titlebox').addEventListener('click', () => { if (needLink) askForLink(); });
+  // after a drop, ask the server (plain HTTP) whether the token is still accepted: 401 = wrong/expired link,
+  // anything else = the Mac is unreachable and worth retrying
+  const tokenRejected = async () => {
+    try { return (await fetch(`/ws?k=${encodeURIComponent(token)}`, { cache: 'no-store' })).status === 401; }
+    catch { return false; }
+  };
   function connect() {
+    if (!token) { needLink = true; setStatus(false, 'no link yet — tap here to enter it'); return; }
     ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(token)}`);
     ws.onopen = () => {
-      retry = 500; setStatus(true, `connected to ${location.hostname}`);
+      retry = 500; needLink = false; setStatus(true, `connected to ${location.hostname}`);
       try { localStorage.setItem('rm-token', token); } catch {}
     };
-    ws.onclose = () => { setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000); };
+    ws.onclose = async () => {
+      if (await tokenRejected()) { needLink = true; setStatus(false, 'link expired — tap here to enter the new one'); return; }
+      setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000);
+    };
     ws.onerror = () => ws.close();
   }
   const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };

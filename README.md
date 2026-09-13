@@ -57,8 +57,10 @@ The app lives in the **menu bar** only (a cursor icon near the clock). It has no
    Or use *Copy Phone Link* from the menu and send it to the phone.
 3. The page opens in the browser. The dot in the header is **green** when connected, **red** while it retries.
 4. Recommended: **Add to Home Screen** (Safari: Share > Add to Home Screen; Chrome: menu > Add to Home screen /
-   Install app). It then opens as its own app with a proper icon and **no browser URL bar**, and it remembers the
-   link, so it keeps working across restarts.
+   Install app). It then opens as its own app with a proper icon and **no browser URL bar**. Add it from the page you
+   opened via the QR link: the link is baked into the icon, so it keeps working across restarts. If the app ever says
+   "no link yet" or "link expired" (for example after *New Link* on the Mac), tap the title and paste the link, or just
+   the code after `k=`, from the Mac's *Copy Phone Link*.
 
 The page keeps the phone's screen awake while it is open. Browsers only offer the real wake-lock API on HTTPS, so
 over plain HTTP the page plays a tiny silent video after your first touch instead. One side effect on iPhone: starting

@@ -141,12 +141,13 @@ private final class Client {
         }
         let target = String(req[1]).split(separator: "?", maxSplits: 1)
         let path = String(target[0]), query = target.count > 1 ? String(target[1]) : ""
+        let k = query.split(separator: "&").compactMap { kv -> String? in
+            let a = kv.split(separator: "=", maxSplits: 1)
+            return a.count == 2 && a[0] == "k" ? String(a[1]).removingPercentEncoding : nil
+        }.first
+        let tokenOK = server.token.isEmpty || k == server.token
         if path == "/ws" {
-            let k = query.split(separator: "&").compactMap { kv -> String? in
-                let a = kv.split(separator: "=", maxSplits: 1)
-                return a.count == 2 && a[0] == "k" ? String(a[1]).removingPercentEncoding : nil
-            }.first
-            guard server.token.isEmpty || k == server.token else { sendHTTP(401, Data("bad token\n".utf8)); return }
+            guard tokenOK else { sendHTTP(401, Data("bad token\n".utf8)); return }
             guard headers["upgrade"]?.lowercased() == "websocket", let key = headers["sec-websocket-key"] else {
                 sendHTTP(400, Data("expected a websocket upgrade\n".utf8)); return
             }
@@ -155,6 +156,13 @@ private final class Client {
             conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in })
             isWebSocket = true
             server.clientOpened(self)
+        } else if path == "/manifest.json", let r = server.resource(path) {
+            // only a page that already has the token gets a start_url containing it (home-screen apps open there)
+            var text = String(decoding: r.data, as: UTF8.self)
+            if tokenOK && !server.token.isEmpty {
+                text = text.replacingOccurrences(of: "\"start_url\": \"/\"", with: "\"start_url\": \"/?k=\(server.token)\"")
+            }
+            sendHTTP(200, Data(text.utf8), type: r.type)
         } else if let r = server.resource(path) {
             sendHTTP(200, r.data, type: r.type)
         } else {

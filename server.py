@@ -250,13 +250,16 @@ def main():
 
     def process_request(conn, request):
         u = urlparse(request.path)
+        token_ok = not token or parse_qs(u.query).get("k", [None])[0] == token
         if u.path == "/ws":
-            if token and parse_qs(u.query).get("k", [None])[0] != token:
+            if not token_ok:
                 return conn.respond(HTTPStatus.UNAUTHORIZED, "bad token\n")
             return None  # proceed with the WebSocket handshake
         if u.path in WEB_FILES:
             file, ctype = WEB_FILES[u.path]
             body = (HERE / file).read_bytes()
+            if u.path == "/manifest.json" and token_ok and token:   # home-screen apps open at start_url: keep the link in it
+                body = body.replace(b'"start_url": "/"', b'"start_url": "/?k=%s"' % token.encode())
             return Response(HTTPStatus.OK, "OK", Headers([("Content-Type", ctype), ("Content-Length", str(len(body))),
                                                           ("Cache-Control", "no-store"), ("Connection", "close")]), body)
         return conn.respond(HTTPStatus.NOT_FOUND, "not found\n")
