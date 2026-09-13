@@ -131,11 +131,30 @@ cd remote-mouse && git pull
 app/build.sh --install && open -a "Remote Mouse"
 ```
 
-The app is ad-hoc signed, so **each rebuild changes its identity and macOS forgets the Accessibility grant**.
-After rebuilding, open *Privacy & Security > Accessibility*, remove the old "Remote Mouse" entry (−) and enable the
-new one. To keep the identity stable across rebuilds, create a self-signed *Code Signing* certificate in Keychain
-Access (Certificate Assistant > Create a Certificate, type "Code Signing") and build with
-`RM_SIGN="<certificate name>" app/build.sh --install`.
+By default the app is ad-hoc signed, so **each rebuild changes its identity and macOS forgets the Accessibility
+grant**. After rebuilding, open *Privacy & Security > Accessibility*, remove the old "Remote Mouse" entry (−) and
+enable the new one. If you rebuild often, set up a local certificate once (next section) and this stops happening.
+
+### Local development: a stable signing identity
+
+Create a self-signed code-signing certificate named **Remote Mouse Dev** in your login keychain. `build.sh` uses it
+automatically whenever it exists (or set `RM_SIGN="<name>"` to use any other identity). macOS will ask for your
+password once to trust the certificate, and codesign may ask for keychain access the first time (choose *Always Allow*).
+
+```sh
+openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes -keyout dev.key -out dev.crt \
+  -subj "/CN=Remote Mouse Dev" -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning" -addext "basicConstraints=critical,CA:false"
+openssl pkcs12 -export -legacy -inkey dev.key -in dev.crt -out dev.p12 -passout pass:x -name "Remote Mouse Dev"
+security import dev.p12 -k ~/Library/Keychains/login.keychain-db -P x -T /usr/bin/codesign
+security add-trusted-cert -r trustRoot -p codeSign -k ~/Library/Keychains/login.keychain-db dev.crt
+rm dev.key dev.p12 dev.crt
+app/build.sh --install && open -a "Remote Mouse"      # re-grant Accessibility one last time
+```
+
+(`-legacy` matters: macOS can't import the PKCS#12 format that OpenSSL 3 writes by default.)
+This only removes the re-grant hassle on your own Mac; it is not a Developer ID, so copies of the app downloaded
+on other Macs still get the Gatekeeper warning.
 
 ## Uninstall
 
