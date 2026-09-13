@@ -99,14 +99,28 @@ final class Injector {
         }
     }
 
+    // modifier keys are pressed for real around the key: system hotkeys (Mission Control, Spotlight) watch the
+    // modifier state, not just the flags on the key event
+    private static let modifierKeys: [(name: String, vk: CGKeyCode, flag: CGEventFlags)] = [
+        ("cmd", 55, .maskCommand), ("shift", 56, .maskShift), ("alt", 58, .maskAlternate),
+        ("opt", 58, .maskAlternate), ("ctrl", 59, .maskControl), ("fn", 63, .maskSecondaryFn),
+    ]
+
+    private func postKey(_ vk: CGKeyCode, down: Bool, flags: CGEventFlags) {
+        guard let ev = CGEvent(keyboardEventSource: nil, virtualKey: vk, keyDown: down) else { return }
+        ev.flags = ev.flags.union(flags)      // keep the fn/numpad flags arrow keys carry by default
+        ev.post(tap: .cghidEventTap)
+    }
+
     func key(_ code: String, mods: [String]) {
         guard let vk = Injector.keycodes[code.lowercased()] else { return }
-        let f = flags(mods)
-        for down in [true, false] {
-            guard let ev = CGEvent(keyboardEventSource: nil, virtualKey: vk, keyDown: down) else { continue }
-            if !f.isEmpty { ev.flags = f }
-            ev.post(tap: .cghidEventTap)
-        }
+        var held: [(name: String, vk: CGKeyCode, flag: CGEventFlags)] = []
+        for m in Injector.modifierKeys where mods.contains(m.name) && !held.contains(where: { $0.vk == m.vk }) { held.append(m) }
+        var f = CGEventFlags()
+        for m in held { f.insert(m.flag); postKey(m.vk, down: true, flags: f) }
+        postKey(vk, down: true, flags: f)
+        postKey(vk, down: false, flags: f)
+        for m in held.reversed() { f.remove(m.flag); postKey(m.vk, down: false, flags: f) }
     }
 
     func media(_ name: String) {

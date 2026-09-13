@@ -135,18 +135,32 @@ class Injector:
                 Quartz.CGEventKeyboardSetUnicodeString(ev, len(ch), ch)
                 Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
 
+    # modifier keys are pressed for real around the key: system hotkeys (Mission Control, Spotlight) watch the
+    # modifier state, not just the flags on the key event
+    MODIFIER_KEYS = [("cmd", 55), ("shift", 56), ("alt", 58), ("opt", 58), ("ctrl", 59), ("fn", 63)]
+
+    def _post_key(self, vk, down, flags):
+        ev = Quartz.CGEventCreateKeyboardEvent(None, vk, down)
+        Quartz.CGEventSetFlags(ev, Quartz.CGEventGetFlags(ev) | flags)   # keep the fn/numpad flags arrow keys carry
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+
     def key(self, code, mods=()):
         vk = KEYCODES.get(code.lower())
         if vk is None:
             return
+        held = []
+        for name, mvk in self.MODIFIER_KEYS:
+            if name in mods and mvk not in [h[0] for h in held]:
+                held.append((mvk, MODIFIERS[name]))
         flags = 0
-        for m in mods:
-            flags |= MODIFIERS.get(m, 0)
-        for down in (True, False):
-            ev = Quartz.CGEventCreateKeyboardEvent(None, vk, down)
-            if flags:
-                Quartz.CGEventSetFlags(ev, flags)
-            Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+        for mvk, flag in held:
+            flags |= flag
+            self._post_key(mvk, True, flags)
+        self._post_key(vk, True, flags)
+        self._post_key(vk, False, flags)
+        for mvk, flag in reversed(held):
+            flags &= ~flag
+            self._post_key(mvk, False, flags)
 
     def media(self, name):
         key = MEDIA_KEYS.get(name)
