@@ -5,6 +5,13 @@ import Cocoa
 final class Injector {
     private var held: [String] = []          // buttons currently pressed, in press order
     private var remX = 0.0, remY = 0.0       // sub-pixel remainders so slow moves still add up
+    // Posted events are applied asynchronously, so reading the cursor back between rapid moves returns a stale
+    // position and loses part of the movement. Keep our own target while moves keep coming; after a pause, start
+    // again from wherever the cursor really is (the physical mouse may have moved it).
+    private var target: CGPoint?
+    private var lastMoveAt: CFAbsoluteTime = 0
+    private var cachedBounds = CGRect.null
+    private var boundsAt: CFAbsoluteTime = 0
 
     private struct Btn { let button: CGMouseButton; let down: CGEventType; let up: CGEventType; let drag: CGEventType }
     private static let buttons: [String: Btn] = [
@@ -36,12 +43,23 @@ final class Injector {
     private func cursor() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 
     private func bounds() -> CGRect {
-        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
-        var n: UInt32 = 0
-        CGGetActiveDisplayList(16, &ids, &n)
-        var r = CGRect.null
-        for i in 0..<Int(n) { r = r.union(CGDisplayBounds(ids[i])) }
-        return r.isNull ? CGRect(x: 0, y: 0, width: 1920, height: 1080) : r
+        let now = CFAbsoluteTimeGetCurrent()
+        if cachedBounds.isNull || now - boundsAt > 5 {        // re-read every few seconds in case displays change
+            var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+            var n: UInt32 = 0
+            CGGetActiveDisplayList(16, &ids, &n)
+            var r = CGRect.null
+            for i in 0..<Int(n) { r = r.union(CGDisplayBounds(ids[i])) }
+            cachedBounds = r.isNull ? CGRect(x: 0, y: 0, width: 1920, height: 1080) : r
+            boundsAt = now
+        }
+        return cachedBounds
+    }
+
+    /// Where the cursor is (or is about to be, if we moved it a moment ago).
+    private func currentPoint() -> CGPoint {
+        if let t = target, CFAbsoluteTimeGetCurrent() - lastMoveAt < 0.25 { return t }
+        return cursor()
     }
 
     private func post(_ type: CGEventType, at p: CGPoint, button: CGMouseButton = .left, clicks: Int64 = 1) {
@@ -57,19 +75,21 @@ final class Injector {
     }
 
     func move(dx: Double, dy: Double) {
-        let c = cursor()
+        let c = currentPoint()
         remX += dx; remY += dy
         let ix = remX.rounded(.towardZero), iy = remY.rounded(.towardZero)
         remX -= ix; remY -= iy
         let b = bounds()
         let p = CGPoint(x: min(max(c.x + ix, b.minX), b.maxX - 1), y: min(max(c.y + iy, b.minY), b.maxY - 1))
+        target = p
+        lastMoveAt = CFAbsoluteTimeGetCurrent()
         if let name = held.last, let btn = Injector.buttons[name] { post(btn.drag, at: p, button: btn.button) }
         else { post(.mouseMoved, at: p) }
     }
 
     func button(_ name: String, down: Bool, clicks: Int64 = 1) {
         guard let btn = Injector.buttons[name] else { return }
-        post(down ? btn.down : btn.up, at: cursor(), button: btn.button, clicks: clicks)
+        post(down ? btn.down : btn.up, at: currentPoint(), button: btn.button, clicks: clicks)
         if down { if !held.contains(name) { held.append(name) } } else { held.removeAll { $0 == name } }
     }
 

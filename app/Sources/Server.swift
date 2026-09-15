@@ -74,7 +74,15 @@ final class RemoteServer {
     // called on `queue` by clients
     fileprivate func message(_ bytes: [UInt8], from c: Client) {
         guard let obj = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any] else { return }
-        if obj["t"] as? String == "ping" { c.sendText("{\"t\":\"pong\"}"); return }
+        switch obj["t"] as? String {
+        case "ping": c.sendText("{\"t\":\"pong\"}")
+        case "rtc": c.handleRTC(obj)                 // WebRTC signalling for the UDP-like data channel
+        default: injector.handle(obj)
+        }
+    }
+    /// Event received over the data channel (called on `queue`).
+    fileprivate func datagram(_ data: Data) {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         injector.handle(obj)
     }
     fileprivate func clientOpened(_ c: Client) { NSLog("phone connected: %@", c.peer); notify() }
@@ -94,6 +102,7 @@ private final class Client {
     private var closed = false
     private var awaitingPong = false
     private(set) var isWebSocket = false
+    private var rtc: RTCBridge?
 
     init(_ conn: NWConnection, server: RemoteServer) { self.conn = conn; self.server = server }
     var peer: String {
@@ -228,6 +237,20 @@ private final class Client {
 
     func sendText(_ s: String) { sendFrame(0x1, Array(s.utf8)) }
 
+    /// Signalling from the phone; the bridge's callbacks come from WebRTC threads and are hopped onto the server queue.
+    func handleRTC(_ m: [String: Any]) {
+        if rtc == nil {
+            rtc = RTCBridge(onMessage: { [weak self] data in
+                guard let self else { return }
+                self.server.queue.async { guard !self.closed else { return }; self.server.datagram(data) }
+            }, signal: { [weak self] msg in
+                guard let self, let data = try? JSONSerialization.data(withJSONObject: msg) else { return }
+                self.server.queue.async { guard !self.closed else { return }; self.sendText(String(decoding: data, as: UTF8.self)) }
+            })
+        }
+        rtc?.handleSignal(m)
+    }
+
     func ping() {
         if awaitingPong { finish() } else { awaitingPong = true; sendFrame(0x9, []) }
     }
@@ -235,6 +258,7 @@ private final class Client {
     func finish() {
         guard !closed else { return }
         closed = true
+        rtc?.close(); rtc = nil
         conn.cancel()
         server.clientClosed(self)
     }

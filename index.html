@@ -237,20 +237,69 @@
     try { return (await fetch(`/ws?k=${encodeURIComponent(token)}`, { cache: 'no-store' })).status === 401; }
     catch { return false; }
   };
+  let connected = false;
+  const refreshStatus = () => { if (connected) setStatus(true, `connected to ${location.hostname} · ${transport}`); };
   function connect() {
     if (!token) { needLink = true; setStatus(false, 'no link yet — tap here to enter it'); return; }
     ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(token)}`);
     ws.onopen = () => {
-      retry = 500; needLink = false; setStatus(true, `connected to ${location.hostname}`);
+      retry = 500; needLink = false; connected = true; refreshStatus();
       try { localStorage.setItem('rm-token', token); } catch {}
+      startRTC();
     };
     ws.onclose = async () => {
+      connected = false; stopRTC();
       if (await tokenRejected()) { needLink = true; setStatus(false, 'link expired — tap here to enter the new one'); return; }
       setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000);
     };
     ws.onerror = () => ws.close();
+    ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m.t === 'rtc') onSignal(m); };
   }
-  const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+  const wsSend = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+  // ------------------------------------------------------------ UDP-like fast path: WebRTC data channel
+  // move/scroll go over an unordered, unreliable data channel (no retransmits, no head-of-line blocking, no
+  // Nagle stalls) once it is open; clicks, keys and everything else stay on the WebSocket, which is also the
+  // fallback when the channel is unavailable. Signalling (offer/answer/ICE) rides on the WebSocket.
+  let pc = null, dc = null, transport = 'tcp';
+  const stopRTC = () => {
+    try { if (dc) dc.close(); } catch {}
+    try { if (pc) pc.close(); } catch {}
+    dc = null; pc = null; transport = 'tcp';
+  };
+  const startRTC = () => {
+    stopRTC();
+    if (typeof RTCPeerConnection !== 'function') return;
+    try {
+      pc = new RTCPeerConnection({ iceServers: [] });                 // same LAN: host candidates only
+      dc = pc.createDataChannel('input', { ordered: false, maxRetransmits: 0 });
+      dc.onopen = () => { transport = 'udp'; refreshStatus(); };
+      dc.onclose = () => { transport = 'tcp'; refreshStatus(); };
+      pc.onicecandidate = e => {
+        if (e.candidate) wsSend({ t: 'rtc', ice: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex } });
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc && ['failed', 'disconnected', 'closed'].includes(pc.connectionState)) { transport = 'tcp'; refreshStatus(); }
+      };
+      pc.createOffer().then(o => pc.setLocalDescription(o))
+        .then(() => wsSend({ t: 'rtc', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }))
+        .catch(() => {});
+    } catch { stopRTC(); }
+  };
+  const onSignal = async m => {
+    if (!pc) return;
+    try {
+      if (m.sdp) await pc.setRemoteDescription(m.sdp);
+      else if (m.ice) await pc.addIceCandidate(m.ice);
+    } catch {}
+  };
+  const send = o => {
+    if ((o.t === 'move' || o.t === 'scroll') && dc && dc.readyState === 'open') {
+      if (dc.bufferedAmount < 4096) dc.send(JSON.stringify(o));      // backlog: drop instead of replaying later
+      return;
+    }
+    wsSend(o);
+  };
   connect();
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && (!ws || ws.readyState > 1)) connect();

@@ -32,7 +32,8 @@ open -a "Remote Mouse"
 ```
 
 `build.sh --install` compiles a universal binary, signs it, and copies `Remote Mouse.app` to `~/Applications`.
-Takes about a minute the first time.
+The first run also downloads the prebuilt WebRTC framework (about 45 MB, from github.com/stasel/WebRTC) into
+`app/build/`, which the app bundles. Takes a couple of minutes the first time.
 
 ## First run (one-time prompts)
 
@@ -56,6 +57,10 @@ The app lives in the **menu bar** only (a cursor icon near the clock). It has no
 2. Point the phone's **camera** at the QR code, on the desktop widget or in the menu bar dropdown, and open the link.
    Or use *Copy Phone Link* from the menu and send it to the phone.
 3. The page opens in the browser. The dot in the header is **green** when connected, **red** while it retries.
+   The header also shows the transport: **udp** means cursor and scroll events travel over a WebRTC data channel
+   (unordered, no retransmits, so a dropped packet never stalls the ones behind it); **tcp** means they use the
+   WebSocket, which is the fallback if the channel cannot be set up. Clicks, keys and media keys always use the
+   WebSocket so none get lost.
 4. Recommended: **Add to Home Screen** (Safari: Share > Add to Home Screen; Chrome: menu > Add to Home screen /
    Install app). It then opens as its own app with a proper icon and **no browser URL bar**. Add it from the page you
    opened via the QR link: the link is baked into the icon, so it keeps working across restarts. If the app ever says
@@ -192,12 +197,13 @@ and the token is random on every start unless you pass `--token`. Quit the menu 
 
 ## Project layout
 
-- `app/Sources/*.swift`: the menu bar app. `Server.swift` (HTTP + WebSocket on Network.framework), `Injector.swift`
-  (CGEvent injection), `Widget.swift` (QR card + desktop panel), `AppDelegate.swift` (menu, login item, IP polling).
+- `app/Sources/*.swift`: the menu bar app. `Server.swift` (HTTP + WebSocket on Network.framework), `RTC.swift`
+  (WebRTC data channel per phone), `Injector.swift` (CGEvent injection), `Widget.swift` (QR card + desktop panel),
+  `AppDelegate.swift` (menu, login item, IP polling).
 - `app/build.sh`, `app/Info.plist`, `app/AppIcon.icns`, `app/make_icon.py`: build script, bundle metadata, icon.
 - `index.html`, `manifest.json`, `icons/`: the touchpad page, its web app manifest and home-screen icons, bundled into
   the app at build time. Edit and rebuild to change the phone UI.
-- `server.py`, `run.sh`: the Python server.
+- `server.py`, `run.sh`: the Python server (WebSocket only; the page falls back to tcp with it).
 - `docs/`: README images.
 
 ## Protocol
