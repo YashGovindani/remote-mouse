@@ -14,5 +14,6 @@
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>Built with Claude Code</string>
+  <key>NSAudioCaptureUsageDescription</key><string>Remote Mouse streams the Mac's audio to your phone when you tap Listen.</string>
 </dict>
 </plist>

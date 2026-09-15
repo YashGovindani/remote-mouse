@@ -15,6 +15,8 @@ final class RemoteServer {
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:]
     private var keepalive: DispatchSourceTimer?
+    private var audio: AudioTap?                       // running while at least one phone listens
+    private var listeners = Set<ObjectIdentifier>()
 
     init(port: UInt16, token: String, injector: Injector, resource: @escaping (String) -> (data: Data, type: String)?) {
         self.port = port; self.token = token; self.injector = injector; self.resource = resource
@@ -77,8 +79,42 @@ final class RemoteServer {
         switch obj["t"] as? String {
         case "ping": c.sendText("{\"t\":\"pong\"}")
         case "rtc": c.handleRTC(obj)                 // WebRTC signalling for the UDP-like data channel
+        case "audio": setListening(c, obj["on"] as? Bool ?? false, muteMac: obj["mute"] as? Bool ?? false)
         default: injector.handle(obj)
         }
+    }
+
+    /// Starts the audio tap for the first listener, stops it after the last one leaves.
+    private func setListening(_ c: Client, _ on: Bool, muteMac: Bool) {
+        let id = ObjectIdentifier(c)
+        if on {
+            if audio == nil {
+                let tap = AudioTap { [weak self] chunk in self?.queue.async { self?.broadcastAudio(chunk) } }
+                do { try tap.start(muteMac: muteMac); audio = tap; NSLog("audio: streaming started") }
+                catch {
+                    NSLog("audio: %@", "\(error)")
+                    c.sendText("{\"t\":\"audio\",\"error\":\(Self.jsonString("\(error)"))}")
+                    return
+                }
+            }
+            listeners.insert(id)
+            c.sendText("{\"t\":\"audio\",\"on\":true}")
+        } else {
+            listeners.remove(id)
+            c.sendText("{\"t\":\"audio\",\"on\":false}")
+            stopAudioIfUnused()
+        }
+    }
+    private func stopAudioIfUnused() {
+        if listeners.isEmpty, let tap = audio { tap.stop(); audio = nil; NSLog("audio: streaming stopped") }
+    }
+    private func broadcastAudio(_ chunk: Data) {
+        for id in listeners { clients[id]?.sendAudio(chunk) }
+    }
+    private static func jsonString(_ s: String) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: [s])) ?? Data("[\"?\"]".utf8)
+        let text = String(decoding: data, as: UTF8.self)
+        return String(text.dropFirst().dropLast())
     }
     /// Event received over the data channel (called on `queue`).
     fileprivate func datagram(_ data: Data) {
@@ -88,6 +124,8 @@ final class RemoteServer {
     fileprivate func clientOpened(_ c: Client) { NSLog("phone connected: %@", c.peer); notify() }
     fileprivate func clientClosed(_ c: Client) {
         clients.removeValue(forKey: ObjectIdentifier(c))
+        listeners.remove(ObjectIdentifier(c))
+        stopAudioIfUnused()
         if c.isWebSocket { injector.releaseAll(); NSLog("phone disconnected: %@", c.peer) }
         notify()
     }
@@ -236,6 +274,12 @@ private final class Client {
     }
 
     func sendText(_ s: String) { sendFrame(0x1, Array(s.utf8)) }
+
+    /// Audio chunk: over the data channel when it is open (lost chunk = short dropout), else the WebSocket.
+    func sendAudio(_ data: Data) {
+        if let rtc, rtc.send(data) { return }
+        sendFrame(0x2, [UInt8](data))
+    }
 
     /// Signalling from the phone; the bridge's callbacks come from WebRTC threads and are hopped onto the server queue.
     func handleRTC(_ m: [String: Any]) {

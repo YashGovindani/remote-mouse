@@ -29,6 +29,12 @@ final class RTCBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDelega
 
     var isOpen: Bool { channel?.readyState == .open }
 
+    /// Sends a binary message if the channel is open and not backed up.
+    func send(_ data: Data) -> Bool {
+        guard let ch = channel, ch.readyState == .open, ch.bufferedAmount < 65_536 else { return false }
+        return ch.sendData(RTCDataBuffer(data: data, isBinary: true))
+    }
+
     /// Handles a signalling message from the phone: {"sdp": {type, sdp}} or {"ice": {candidate, sdpMid, sdpMLineIndex}}.
     func handleSignal(_ m: [String: Any]) {
         if let sdp = m["sdp"] as? [String: Any], let type = sdp["type"] as? String, let text = sdp["sdp"] as? String, type == "offer" {

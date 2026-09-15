@@ -93,6 +93,11 @@ The link contains a secret token. Anyone on your network who has it can control 
 - **⌨︎ Keyboard**: a text box (every character you type is sent live, backspace works), plus esc, tab, arrows,
   enter, backspace, space, ⌘ space (Spotlight), ⌘ tab (switch apps) and ⌃⌘ F (fullscreen).
 - **Media row**: previous, play/pause, next, mute, volume down, volume up.
+- **🎧 listen on phone**: streams whatever the Mac is playing to the phone (speaker, wired or Bluetooth earphones),
+  with a volume slider. First use asks on the Mac for *System Audio Recording* permission (Privacy & Security >
+  Screen & System Audio Recording). Expect a delay of roughly 0.1 to 0.2 s, fine for music and podcasts, noticeable
+  for video. Playback stops when the page goes to the background or the screen locks. The ⚙︎ panel has *Mute Mac
+  while listening* if you want the sound only on the phone. Needs macOS 14.2 or newer and the Remote Mouse app.
 - **Desktops row**: ◀ desktop, mission control, desktop ▶. These send the standard Ctrl+←, Ctrl+↑ and Ctrl+→
   shortcuts, which are on by default under *System Settings > Keyboard > Keyboard Shortcuts > Mission Control*.
 - **⚙︎ Settings**: pointer speed, scroll speed, invert scroll, theme (auto / dark / light), rotate input. Saved on the phone.
@@ -198,8 +203,8 @@ and the token is random on every start unless you pass `--token`. Quit the menu 
 ## Project layout
 
 - `app/Sources/*.swift`: the menu bar app. `Server.swift` (HTTP + WebSocket on Network.framework), `RTC.swift`
-  (WebRTC data channel per phone), `Injector.swift` (CGEvent injection), `Widget.swift` (QR card + desktop panel),
-  `AppDelegate.swift` (menu, login item, IP polling).
+  (WebRTC data channel per phone), `Audio.swift` (system audio tap streamed to listening phones), `Injector.swift`
+  (CGEvent injection), `Widget.swift` (QR card + desktop panel), `AppDelegate.swift` (menu, login item, IP polling).
 - `app/build.sh`, `app/Info.plist`, `app/AppIcon.icns`, `app/make_icon.py`: build script, bundle metadata, icon.
 - `index.html`, `manifest.json`, `icons/`: the touchpad page, its web app manifest and home-screen icons, bundled into
   the app at build time. Edit and rebuild to change the phone UI.
@@ -212,7 +217,9 @@ JSON text messages over a WebSocket at `ws://<mac-ip>:7070/ws?k=<token>`:
 
 `{"t":"move","dx":..,"dy":..}` · `{"t":"click","b":"left|right|middle","n":1|2}` · `{"t":"down"/"up","b":..,"n":..}` ·
 `{"t":"scroll","dx":..,"dy":..,"mods":["ctrl"]}` · `{"t":"text","s":"hello"}` · `{"t":"key","code":"enter","mods":["cmd"]}` ·
-`{"t":"media","name":"play|next|prev|volup|voldown|mute"}` · `{"t":"ping"}` → `{"t":"pong"}`
+`{"t":"media","name":"play|next|prev|volup|voldown|mute"}` · `{"t":"ping"}` → `{"t":"pong"}` ·
+`{"t":"rtc",...}` (WebRTC signalling) · `{"t":"audio","on":true,"mute":false}` → binary audio chunks
+(12-byte header: seq u32, sampleRate u32, frames u16, channels u8, flags u8; then interleaved 16-bit PCM)
 
 ## License
 

@@ -279,6 +279,11 @@ def main():
                 if msg.get("t") == "ping":
                     await ws.send('{"t":"pong"}')
                     continue
+                if msg.get("t") == "audio":
+                    await ws.send('{"t":"audio","error":"audio streaming needs the Remote Mouse app, not the Python server"}')
+                    continue
+                if msg.get("t") == "rtc":
+                    continue  # no WebRTC here; the page stays on the WebSocket
                 try:
                     inj.handle(msg)
                 except Exception as e:  # never let one bad event kill the connection

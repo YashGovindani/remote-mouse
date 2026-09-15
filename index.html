@@ -66,6 +66,10 @@
   .btn { flex: 1; min-height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line);
     color: var(--fg); font-size: 15px; display: grid; place-items: center; touch-action: none; }
   .btn:active, .btn.down { background: var(--panel-active); border-color: var(--accent); }
+  .btn.active { border-color: var(--accent); color: var(--accent); }
+  #volRow { align-items: center; gap: 10px; color: var(--dim); font-size: 14px; }
+  #volRow[hidden] { display: none; }
+  #volRow input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
   .btn.sm { min-height: 44px; font-size: 14px; flex: 1 1 0; padding: 0 4px; }
   .btn.key { font-size: 13px; }
   .media .btn { font-size: 18px; }
@@ -130,6 +134,7 @@
     <label><span>Pointer speed</span><input type="range" id="sens" min="0.5" max="4" step="0.1"><output id="sensOut"></output></label>
     <label><span>Scroll speed</span><input type="range" id="scr" min="0.5" max="5" step="0.1"><output id="scrOut"></output></label>
     <label><span>Invert scroll</span><input type="checkbox" id="inv"></label>
+    <label><span>Mute Mac</span><input type="checkbox" id="muteMac"> while listening on the phone</label>
     <label><span>Theme</span><select id="theme"><option value="auto">auto (follow phone)</option><option value="dark">dark</option><option value="light">light</option></select></label>
     <label><span>Rotate input</span><select id="rot"><option value="off">off (auto-rotate)</option><option value="left">phone turned left</option><option value="right">phone turned right</option></select></label>
   </div>
@@ -153,6 +158,13 @@
     <div class="btn sm key" data-key="left" data-mods="ctrl">◀ desktop</div>
     <div class="btn sm key" data-key="up" data-mods="ctrl">mission control</div>
     <div class="btn sm key" data-key="right" data-mods="ctrl">desktop ▶</div>
+  </div>
+
+  <div class="row">
+    <div class="btn sm" id="listenBtn">🎧 listen on phone</div>
+  </div>
+  <div class="row" id="volRow" hidden>
+    <span>🔈</span><input type="range" id="vol" min="0" max="1" step="0.02" value="1"><span>🔊</span>
   </div>
 
   <div id="kb">
@@ -253,7 +265,13 @@
       setStatus(false, 'disconnected — retrying'); setTimeout(connect, retry); retry = Math.min(retry * 2, 5000);
     };
     ws.onerror = () => ws.close();
-    ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m.t === 'rtc') onSignal(m); };
+    ws.binaryType = 'arraybuffer';
+    ws.onmessage = e => {
+      if (e.data instanceof ArrayBuffer) { onAudioChunk(e.data); return; }
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.t === 'rtc') onSignal(m);
+      else if (m.t === 'audio') onAudioControl(m);
+    };
   }
   const wsSend = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
@@ -273,6 +291,8 @@
     try {
       pc = new RTCPeerConnection({ iceServers: [] });                 // same LAN: host candidates only
       dc = pc.createDataChannel('input', { ordered: false, maxRetransmits: 0 });
+      dc.binaryType = 'arraybuffer';
+      dc.onmessage = e => { if (e.data instanceof ArrayBuffer) onAudioChunk(e.data); };
       dc.onopen = () => { transport = 'udp'; refreshStatus(); };
       dc.onclose = () => { transport = 'tcp'; refreshStatus(); };
       pc.onicecandidate = e => {
@@ -421,6 +441,58 @@
   };
   pad.addEventListener('touchend', end, { passive: false });
   pad.addEventListener('touchcancel', end, { passive: false });
+
+  // ------------------------------------------------------------ listen to the Mac's audio on the phone
+  // The Mac streams 10 ms PCM chunks (see AudioTap in the app); they are scheduled on a Web Audio timeline with a
+  // small jitter buffer. Lost chunks (UDP) become silence; late ones are dropped. Output follows the phone's own
+  // routing: speaker, wired or Bluetooth earphones.
+  let actx = null, gainNode = null, nextT = 0, lastSeq = -1, listening = false, audioTimer = null, chunks = 0;
+  const JITTER = 0.08;
+  const listenBtn = $('listenBtn'), volRow = $('volRow');
+  const setListenUI = () => {
+    listenBtn.textContent = listening ? '🎧 stop listening' : '🎧 listen on phone';
+    listenBtn.classList.toggle('active', listening); volRow.hidden = !listening;
+  };
+  const onAudioChunk = buf => {
+    if (!actx || !listening || buf.byteLength < 12) return;
+    const v = new DataView(buf);
+    const seq = v.getUint32(0, true), rate = v.getUint32(4, true), frames = v.getUint16(8, true), ch = v.getUint8(10);
+    if (!frames || !ch || !rate || buf.byteLength < 12 + frames * ch * 2) return;
+    if (lastSeq >= 0 && seq <= lastSeq) return;                                  // late or duplicate
+    const pcm = new Int16Array(buf, 12, frames * ch);
+    const ab = actx.createBuffer(ch, frames, rate);
+    for (let c = 0; c < ch; c++) { const d = ab.getChannelData(c); for (let i = 0; i < frames; i++) d[i] = pcm[i * ch + c] / 32768; }
+    const now = actx.currentTime;
+    if (lastSeq >= 0 && seq > lastSeq + 1) nextT += (seq - lastSeq - 1) * frames / rate;   // lost chunks: silence
+    lastSeq = seq; chunks++;
+    if (chunks === 1) { clearTimeout(audioTimer); note('🎧 listening', 900); }        // first chunk: the tap is up
+    if (nextT < now + 0.005 || nextT > now + 0.5) nextT = now + JITTER;          // (re)buffer after a stall or drift
+    const src = actx.createBufferSource(); src.buffer = ab; src.connect(gainNode); src.start(nextT);
+    nextT += frames / rate;
+  };
+  const onAudioControl = m => {
+    if (m.error) { listening = false; setListenUI(); note('Audio: ' + m.error, 8000); }
+  };
+  const startListening = async () => {
+    try {
+      if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); gainNode = actx.createGain(); gainNode.connect(actx.destination); }
+      gainNode.gain.value = +$('vol').value;
+      await actx.resume();
+    } catch { note('This browser cannot play audio here.'); return; }
+    lastSeq = -1; nextT = 0; chunks = 0; listening = true; setListenUI();
+    wsSend({ t: 'audio', on: true, mute: $('muteMac').checked });
+    clearTimeout(audioTimer);
+    note('starting…', 8000);                                                    // the Mac's tap takes a few seconds to start
+    audioTimer = setTimeout(() => { if (listening && chunks === 0) note('No audio is arriving from the Mac. Check Privacy & Security > Screen & System Audio Recording on the Mac.', 8000); }, 10000);
+  };
+  const stopListening = () => {
+    listening = false; setListenUI(); clearTimeout(audioTimer);
+    wsSend({ t: 'audio', on: false });
+    try { if (actx) actx.suspend(); } catch {}
+  };
+  listenBtn.addEventListener('click', () => { if (listening) stopListening(); else startListening(); });
+  $('vol').addEventListener('input', () => { if (gainNode) gainNode.gain.value = +$('vol').value; });
+  window.rmAudioStats = () => ({ listening, chunks, lastSeq, state: actx && actx.state, ahead: actx ? +(nextT - actx.currentTime).toFixed(3) : null });
 
   // ------------------------------------------------------------ fullscreen trackpad
   // browser fullscreen hides the browser's own bars where supported (Android Chrome, iPad). iPhone Safari refuses
